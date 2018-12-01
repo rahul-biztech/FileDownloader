@@ -1,19 +1,36 @@
+// import data from "../../raw/orders.json";
 import data from "../../raw/orders_holded.json";
-import {showLog} from "../../utils/Utils.js";
+import { showLog } from "../../utils/Utils.js";
 
-export const extractOrders = () => {
+let path = "";
+let storeByDate = true;
+
+export const extractOrders = (response, dirPath, storageSchema) => {
+    if(response === undefined) {
+        response = data;
+    }
+    /* path = dirPath + "/Instant-Download";
+    storeByDate = storageSchema === "Date"
+        ? true
+        : false; */
+    console.log(path + " store by: " + storageSchema + ": " + storeByDate);
     return new Promise((resolve, reject) => {
-        getOrders().then(result => {
-            showLog(result);
+        getOrders(response).then(result => {
             resolve(result);
+        }, error => {
+            reject(error);
         });
     });
 };
 
-const getOrders = () => {
-    showLog(data);
+const getOrders = response => {
     let finalList = [];
-    let orders = data.orders;
+    let orders = response.orders;
+    if (orders === undefined || orders.length === 0) {
+        return new Promise((resolve, reject) => {
+            reject("Sorry, No new orders found!");
+        });
+    }
     return new Promise((resolve, reject) => {
         orders.forEach((order, index) => {
             let dl = [];
@@ -97,8 +114,14 @@ const getElements = (order, product, side, dl) => {
 };
 
 const getFileSchema = (order, product, ext) => {
+    let directory = "";
+    if (storeByDate) {
+        directory = path + "/" + order.order_date + "/" + order.order_id + "/" + product.sku + "/";
+    } else {
+        directory = path + "/" + order.order_id + "/" + product.sku + "/";
+    }
     return {
-        dirPath: "/hotfolder/rv911/" + order.order_id + "/" + product.sku + "/",
+        dirPath: directory,
         orderId: order.order_id,
         orderDate: order.order_date,
         sku: product.sku,

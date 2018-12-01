@@ -88,15 +88,29 @@ app.on("ready", async () => {
     menuBuilder.buildMenu();
 
     ipcMain.on("downloadFiles", (e, args) => {
+        let totalCount = args.files.length;
+        console.log("Instant download started for " + totalCount + " files");
         let files = [];
+        let pass = [];
+        let fail = [];
         args.files.forEach((file, index) => {
             if (file.url !== "") {
-                files.push(downloadFile(file.url, file.dirPath, index));
+                files.push(downloadFile(file.url, file.dirPath, index).then(result => {
+                    pass.push(result);
+                    sendProgressResponse(e, "Pass: " + Math.round((pass.length/totalCount)*100));
+                }).catch(error => {
+                    fail.push(error);
+                    sendProgressResponse(e, "Fail: " + fail.length + "/" + totalCount);
+                }));
             }
         });
         Promise.all(files).then(result => {
-            showLog("All files downloaded!");
-            sendResponse(e, result);
+            console.log("All files downloaded and count is " + files.length);
+            let output = {
+                pass,
+                fail
+            };
+            sendResponse(e, output);
         });
     });
 
@@ -106,18 +120,24 @@ app.on("ready", async () => {
 });
 
 function sendResponse(e, result) {
-    e.sender.send("rv911-done", result + ". Files downloaded!");
+    e.sender.send("rv911-done", result);
+}
+
+function sendProgressResponse(e, result) {
+    console.log(result);
+    e.sender.send("rv911-progress", result);
 }
 
 const downloadFile = (url, path, index) => {
     return new Promise((resolve, reject) => {
         let dirPath = app.getPath("pictures") + path;
         download(url, dirPath).then(data => {
-            showLog(index + ". " + url);
+            console.log(index + ". " + url);
             resolve(index);
         }).catch(error => {
-            showLog(index + ". Error: " + url);
-            reject("Error: " + url);
+            console.log(index + ". Error: " + url);
+            console.log(error);
+            reject(index);
         });
     });
 };
