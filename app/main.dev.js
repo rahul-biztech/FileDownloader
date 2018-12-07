@@ -97,18 +97,45 @@ app.on("ready", async () => {
             if (file.url !== "") {
                 files.push(downloadFile(file.url, file.dirPath, index).then(result => {
                     pass.push(result);
-                    sendProgressResponse(e, "Pass: " + Math.round((pass.length/totalCount)*100));
+                    let count = (pass.length/totalCount)*100;
+                    let completion = Number.parseFloat(count).toFixed(2)
+                    let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
+                    showLog(`Passed: (${pass.length}/${totalCount})*100 = ${completion}`);
+                    if(completion%5 > 0 && completion%5 < 1){
+                        sendProgressResponse(e, {"type": "passed", "value": completion, 'processed': totalProcessed});
+                    }
                 }).catch(error => {
                     fail.push(error);
-                    sendProgressResponse(e, "Fail: " + fail.length + "/" + totalCount);
+                    let count = (fail.length/totalCount)*100;
+                    let failed = Number.parseFloat(count).toFixed(2)
+                    let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
+                    showLog(`Failed: (${fail.length}/${totalCount})*100 = ${failed}`);
+                    if(failed%5 > 0 && failed%5 < 1){
+                        sendProgressResponse(e, {"type": "failed", "value": failed, 'processed': totalProcessed});
+                    }
                 }));
+            } else {
+                fail.push(index);
+                let count = (fail.length/totalCount)*100;
+                let failed = Number.parseFloat(count).toFixed(2)
+                let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
+                showLog(`Failed: (${fail.length}/${totalCount})*100 = ${failed}`);
+                if(failed%5 > 0 && failed%5 < 1){
+                    sendProgressResponse(e, {"type": "failed", "value": failed, 'processed': totalProcessed});
+                }
             }
         });
         Promise.all(files).then(result => {
             console.log("All files downloaded and count is " + files.length);
+            let passed = Math.round((pass.length/totalCount)*100);
+            let failed = Math.round((fail.length/totalCount)*100);
+            let totalProcessed = passed+failed;
             let output = {
                 pass,
-                fail
+                fail,
+                passed,
+                failed,
+                'processed': totalProcessed
             };
             sendResponse(e, output);
         });
@@ -132,10 +159,10 @@ const downloadFile = (url, path, index) => {
     return new Promise((resolve, reject) => {
         let dirPath = app.getPath("pictures") + path;
         download(url, dirPath).then(data => {
-            console.log(index + ". " + url);
+            //console.log(index + ". " + url);
             resolve(index);
         }).catch(error => {
-            console.log(index + ". Error: " + url);
+            //console.log(index + ". Error: " + url);
             console.log(error);
             reject(index);
         });
