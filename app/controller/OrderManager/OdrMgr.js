@@ -131,6 +131,7 @@ const getFileSchema = (order, product, ext) => {
         dirName: "",
         fileName: "",
         url: "",
-        extension: ext
+        extension: ext,
+        downloadStatus: 'pending'
     };
 };

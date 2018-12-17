@@ -243,7 +243,7 @@
     "stylelint-config-prettier": "^4.0.0",
     "stylelint-config-standard": "^18.2.0",
     "testcafe": "^0.23.0",
-    "testcafe-browser-provider-electron": "^0.0.6",
+    "testcafe-browser-provider-electron": "0.0.7",
     "testcafe-live": "^0.1.3",
     "testcafe-react-selectors": "^3.0.0",
     "uglifyjs-webpack-plugin": "1.2.7",
@@ -257,6 +257,8 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.2.0",
+    "@material-ui/core": "^3.6.2",
+    "@material-ui/icons": "^3.0.1",
     "axios": "^0.18.0",
     "download": "^7.1.0",
     "electron-debug": "^2.0.0",

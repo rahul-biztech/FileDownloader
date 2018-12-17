@@ -11,12 +11,13 @@
  * @flow
  */
 import {app, BrowserWindow, ipcMain, ipcRenderer} from "electron";
-import {autoUpdater} from "electron-updater";
+import {autoUpdater, DOWNLOAD_PROGRESS} from "electron-updater";
 import log from "electron-log";
 import MenuBuilder from "./menu";
 import download from "download";
 import fs from "fs";
 import {showLog} from "./utils/Utils";
+import { START_DOWNLOAD, DOWNLOAD_DONE } from "./utils/Constants";
 
 export default class AppUpdater {
     constructor() {
@@ -48,7 +49,6 @@ const installExtensions = async () => {
 /**
  * Add event listeners...
  */
-
 app.on("window-all-closed", () => {
     // Respect the OSX convention of having the application in memory even
     // after all windows have been closed
@@ -87,41 +87,78 @@ app.on("ready", async () => {
     const menuBuilder = new MenuBuilder(mainWindow);
     menuBuilder.buildMenu();
 
-    ipcMain.on("downloadFiles", (e, args) => {
+    ipcMain.on(START_DOWNLOAD, (e, args) => {
         let totalCount = args.files.length;
         console.log("Instant download started for " + totalCount + " files");
         let files = [];
         let pass = [];
         let fail = [];
+        let processedFiles = [];
+        
+        let lastStatus = 0;
+
         args.files.forEach((file, index) => {
             if (file.url !== "") {
                 files.push(downloadFile(file.url, file.dirPath, index).then(result => {
+                    file.downloadStatus = 'Downloaded';
+                    processedFiles.push(file);
                     pass.push(result);
                     let count = (pass.length/totalCount)*100;
                     let completion = Number.parseFloat(count).toFixed(2)
                     let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
                     showLog(`Passed: (${pass.length}/${totalCount})*100 = ${completion}`);
-                    if(completion%5 > 0 && completion%5 < 1){
-                        sendProgressResponse(e, {"type": "passed", "value": completion, 'processed': totalProcessed});
+                    
+                    let currentStatus = Math.round((processedFiles.length*100)/totalCount);
+                    if(currentStatus !== lastStatus) {
+                        lastStatus = currentStatus;
+                    //if(completion%5 > 0 && completion%5 < 1){
+                        sendProgressResponse(e, {
+                            "type": "passed", 
+                            "value": completion, 
+                            'processed': totalProcessed,
+                            'processedFiles': processedFiles
+                        });
                     }
                 }).catch(error => {
+                    file.downloadStatus = 'Failed';
+                    processedFiles.push(file);
                     fail.push(error);
                     let count = (fail.length/totalCount)*100;
                     let failed = Number.parseFloat(count).toFixed(2)
                     let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
                     showLog(`Failed: (${fail.length}/${totalCount})*100 = ${failed}`);
-                    if(failed%5 > 0 && failed%5 < 1){
-                        sendProgressResponse(e, {"type": "failed", "value": failed, 'processed': totalProcessed});
+                    
+                    let currentStatus = Math.round((processedFiles.length*100)/totalCount);
+                    if(currentStatus !== lastStatus) {
+                        lastStatus = currentStatus;
+                    //if(completion%5 > 0 && completion%5 < 1){
+                        sendProgressResponse(e, {
+                            "type": "failed", 
+                            "value": failed, 
+                            'processed': totalProcessed,
+                            'processedFiles': processedFiles
+                        });
                     }
                 }));
             } else {
+                file.downloadStatus = 'N/A';
+                processedFiles.push(file);
                 fail.push(index);
                 let count = (fail.length/totalCount)*100;
                 let failed = Number.parseFloat(count).toFixed(2)
                 let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
                 showLog(`Failed: (${fail.length}/${totalCount})*100 = ${failed}`);
-                if(failed%5 > 0 && failed%5 < 1){
-                    sendProgressResponse(e, {"type": "failed", "value": failed, 'processed': totalProcessed});
+
+                let currentStatus = Math.round((processedFiles.length*100)/totalCount);
+                    if(currentStatus !== lastStatus) {
+                        lastStatus = currentStatus;
+                    //if(completion%5 > 0 && completion%5 < 1){
+                    sendProgressResponse(e, {
+                        "type": "failed", 
+                        "value": failed, 
+                        'processed': totalProcessed,
+                        'processedFiles': processedFiles
+                    });
                 }
             }
         });
@@ -130,12 +167,9 @@ app.on("ready", async () => {
             let passed = Math.round((pass.length/totalCount)*100);
             let failed = Math.round((fail.length/totalCount)*100);
             let totalProcessed = passed+failed;
-            let output = {
-                pass,
-                fail,
-                passed,
-                failed,
-                'processed': totalProcessed
+            let output = {pass, fail, passed, failed,
+                'processed': totalProcessed,
+                'processedFiles': processedFiles
             };
             sendResponse(e, output);
         });
@@ -147,22 +181,20 @@ app.on("ready", async () => {
 });
 
 function sendResponse(e, result) {
-    e.sender.send("rv911-done", result);
+    e.sender.send(DOWNLOAD_DONE, result);
 }
 
 function sendProgressResponse(e, result) {
     console.log(result);
-    e.sender.send("rv911-progress", result);
+    e.sender.send(DOWNLOAD_PROGRESS, result);
 }
 
 const downloadFile = (url, path, index) => {
     return new Promise((resolve, reject) => {
         let dirPath = app.getPath("pictures") + path;
         download(url, dirPath).then(data => {
-            //console.log(index + ". " + url);
             resolve(index);
         }).catch(error => {
-            //console.log(index + ". Error: " + url);
             console.log(error);
             reject(index);
         });
