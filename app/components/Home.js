@@ -2,7 +2,7 @@
 import React, {Component, Fragment} from "react";
 import {Link} from "react-router-dom";
 import routes from "../constants/routes";
-import {ipcRenderer} from "electron";
+import {ipcRenderer, shell, app} from "electron";
 import {showLog} from "../utils/Utils";
 import {extractOrders} from "../controller/OrderManager/OdrMgr";
 import {Line} from 'rc-progress';
@@ -83,7 +83,6 @@ class Home extends Component {
             let processedFiles = result.processedFiles;
 
             let finalResult = this.arrayUnique(orderRecords.concat(processedFiles));
-            //console.log(finalResult);
 
             this.setState({
                 downloadResult: {
@@ -93,13 +92,6 @@ class Home extends Component {
                 },
                 orderRecords: finalResult
             })
-            /* this.setState({
-                downloadResult: {
-                    ...downloadResult,
-                    [type]: value,
-                    'processed': result.processed
-                }
-            }); */
         });
     }
 
@@ -122,9 +114,9 @@ class Home extends Component {
         interval = setInterval(this.fetchOrders, 30 * 60 * 1000);
     }
 
-    async componentWillUnmount() {
+    componentWillUnmount() {
         clearInterval(interval);
-        await ipcRenderer.removeAllListeners([DOWNLOAD_DONE, DOWNLOAD_PROGRESS]);
+        ipcRenderer.removeAllListeners([DOWNLOAD_DONE, DOWNLOAD_PROGRESS]);
     }
 
     fetchOrders = () => {
@@ -135,6 +127,11 @@ class Home extends Component {
             ipcRenderer.send(START_DOWNLOAD, {files: files});
         });
     };
+
+    showFileInSystemDirectory = (dirPath) => {
+        console.log(dirPath);
+        shell.showItemInFolder(dirPath);
+    }
 
     render() {
         const {downloadResult, orderRecords} = this.state;
@@ -165,7 +162,10 @@ class Home extends Component {
                         {
                             order.downloadStatus === 'Downloaded' 
                             ?   <TableCell>
-                                    <Typography color='primary'>{order.downloadStatus}</Typography>
+                                    <Typography 
+                                        color='primary'
+                                        onClick={() => this.showFileInSystemDirectory(order.dirPath)}
+                                        >{order.downloadStatus}</Typography>
                                 </TableCell>
                             :   <TableCell>
                                     <Typography color='default'>{order.downloadStatus}</Typography>
@@ -212,23 +212,6 @@ class Home extends Component {
                 </Paper>
             </Fragment>
         );
-
-        /* return (
-            <div className={styles.container} data-tid="container">
-            <div>
-                <h5>Downloaded: {downloadResult.passed+"%"}</h5>
-                <Line percent={downloadResult.passed} strokeWidth="4" strokeColor="#006400" />
-            </div>
-            <div>
-                <h5>Failed: {downloadResult.failed+"%"}</h5>
-                <Line percent={downloadResult.failed} strokeWidth="4" strokeColor="#FF0000" />
-            </div>
-            <div>
-                <h5>Total Processed: {downloadResult.processed+"%"}</h5>
-                <Line percent={downloadResult.processed} strokeWidth="4" strokeColor="#FF8C00" />
-            </div>
-            </div>
-        ); */
     }
 }
 

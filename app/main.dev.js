@@ -100,6 +100,8 @@ app.on("ready", async () => {
         args.files.forEach((file, index) => {
             if (file.url !== "") {
                 files.push(downloadFile(file.url, file.dirPath, index).then(result => {
+                    let dirPath = app.getPath("pictures") + file.dirPath;
+                    file.dirPath = dirPath;
                     file.downloadStatus = 'Downloaded';
                     processedFiles.push(file);
                     pass.push(result);
@@ -193,6 +195,7 @@ const downloadFile = (url, path, index) => {
     return new Promise((resolve, reject) => {
         let dirPath = app.getPath("pictures") + path;
         download(url, dirPath).then(data => {
+            console.log(dirPath);
             resolve(index);
         }).catch(error => {
             console.log(error);
