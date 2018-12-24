@@ -6,7 +6,7 @@ import {ipcRenderer, shell, app} from "electron";
 import {showLog} from "../utils/Utils";
 import {extractOrders} from "../controller/OrderManager/OdrMgr";
 import {Line} from 'rc-progress';
-import { START_DOWNLOAD, DOWNLOAD_DONE } from "../utils/Constants";
+import { START_DOWNLOAD, DOWNLOAD_DONE, GET_DB_RECORDS } from "../utils/Constants";
 import { DOWNLOAD_PROGRESS } from "electron-updater";
 
 import { withStyles } from '@material-ui/core/styles';
@@ -16,9 +16,10 @@ import TableCell from '@material-ui/core/TableCell';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
 import Paper from '@material-ui/core/Paper';
-import { Typography } from "@material-ui/core";
+import { Typography, Tab } from "@material-ui/core";
+import TableHeader from "./Home/TableHeader";
+import TableRecord from "./Home/TableRecord";
 
-type Props = {};
 let interval;
 
 const styles = theme => ({
@@ -53,10 +54,11 @@ class Home extends Component {
                 failed: 0,
                 processed: 0
             },
-            orderRecords: []
+            orderRecords: [],
+            isCompleted: true
         }
 
-        ipcRenderer.removeAllListeners([DOWNLOAD_DONE, DOWNLOAD_PROGRESS]);
+        ipcRenderer.removeAllListeners([DOWNLOAD_DONE, DOWNLOAD_PROGRESS, GET_DB_RECORDS]);
 
         ipcRenderer.on(DOWNLOAD_DONE, (event, result) => {
             let pass = result.pass.sort(function(a, b){return a - b});
@@ -70,12 +72,13 @@ class Home extends Component {
                     failed: result.failed,
                     "processed": result.processed
                 },
-                orderRecords: processedFiles
+                orderRecords: processedFiles,
+                isCompleted: true
             });
         });
 
         ipcRenderer.on(DOWNLOAD_PROGRESS, (event, result) => {
-            showLog(result);
+            //showLog(result);
             const type = result.type;
             const value = result.value;
             const {downloadResult} = this.state;
@@ -90,7 +93,16 @@ class Home extends Component {
                     [type]: value,
                     'processed': result.processed
                 },
-                orderRecords: finalResult
+                isCompleted: false
+            })
+        });
+
+        ipcRenderer.on(GET_DB_RECORDS, (event, result) => {
+            showLog('rv911-DB-Records');
+            showLog(result);
+            showLog(result.length);
+            this.setState({
+                orderRecords: result
             })
         });
     }
@@ -109,14 +121,14 @@ class Home extends Component {
     }
 
     componentDidMount() {
-        this.fetchOrders();
+        ipcRenderer.send(GET_DB_RECORDS);
         clearInterval(interval);
-        interval = setInterval(this.fetchOrders, 30 * 60 * 1000);
+        interval = setInterval(this.fetchOrders, 15 * 60 * 1000);
     }
 
-    componentWillUnmount() {
+    async componentWillUnmount() {
         clearInterval(interval);
-        ipcRenderer.removeAllListeners([DOWNLOAD_DONE, DOWNLOAD_PROGRESS]);
+        await ipcRenderer.removeAllListeners([DOWNLOAD_DONE, DOWNLOAD_PROGRESS, GET_DB_RECORDS]);
     }
 
     fetchOrders = () => {
@@ -133,47 +145,28 @@ class Home extends Component {
         shell.showItemInFolder(dirPath);
     }
 
+    getTable = (classes, tableData) => {
+        if(this.state.isCompleted){
+            return  <Paper className={classes.root}>
+                        <Table className={classes.table}>
+                            <TableHead>
+                                <TableHeader/>
+                            </TableHead>
+                            <TableBody>
+                                {tableData}
+                            </TableBody>
+                        </Table>
+                    </Paper>
+        }
+    }
+
     render() {
         const {downloadResult, orderRecords} = this.state;
         const { classes } = this.props;
 
-        const getTableHeader = (
-            <TableRow>
-                <TableCell numeric>Sr. No.</TableCell>
-                <TableCell>Order Date</TableCell>
-                <TableCell>Order Id</TableCell>
-                <TableCell>SKU</TableCell>
-                <TableCell>File Name</TableCell>
-                <TableCell>File Type</TableCell>
-                <TableCell>Download Status</TableCell>
-            </TableRow>
-        )
-
-        const getOrderRows = (
+        const tableRecords = (
             orderRecords.map((order, index) => {
-                return(
-                    <TableRow key={index}>
-                        <TableCell numeric>{index+1}</TableCell>
-                        <TableCell>{order.orderDate}</TableCell>
-                        <TableCell>{order.orderId}</TableCell>
-                        <TableCell>{order.sku}</TableCell>
-                        <TableCell>{order.fileName}</TableCell>
-                        <TableCell>{order.extension}</TableCell>
-                        {
-                            order.downloadStatus === 'Downloaded' 
-                            ?   <TableCell>
-                                    <Typography 
-                                        color='primary'
-                                        onClick={() => this.showFileInSystemDirectory(order.dirPath)}
-                                        >{order.downloadStatus}</Typography>
-                                </TableCell>
-                            :   <TableCell>
-                                    <Typography color='default'>{order.downloadStatus}</Typography>
-                                </TableCell>
-                        }
-                        
-                    </TableRow>
-                )
+                return <TableRecord key={index} order={order} index={index}/>
             })
         );
 
@@ -185,7 +178,7 @@ class Home extends Component {
             </TableRow>
         )
 
-        let tableData = orderRecords ? getOrderRows : getDefaultRows;
+        let tableData = orderRecords ? tableRecords : getDefaultRows;
 
         return(
             <Fragment>
@@ -199,20 +192,11 @@ class Home extends Component {
                     <Typography>Total Processed: {downloadResult.processed+"%"}</Typography>
                     <Line percent={downloadResult.processed} strokeWidth="4" strokeColor="#FF8C00" />
                 </Paper>
-
-                <Paper className={classes.root}>
-                    <Table className={classes.table}>
-                        <TableHead>
-                            {getTableHeader}
-                        </TableHead>
-                        <TableBody>
-                            {tableData}
-                        </TableBody>
-                    </Table>
-                </Paper>
+                {this.getTable(classes, tableRecords)}
             </Fragment>
         );
     }
 }
 
+//export default Home;
 export default withStyles(styles)(Home);

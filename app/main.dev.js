@@ -17,7 +17,8 @@ import MenuBuilder from "./menu";
 import download from "download";
 import fs from "fs";
 import {showLog} from "./utils/Utils";
-import { START_DOWNLOAD, DOWNLOAD_DONE } from "./utils/Constants";
+import { START_DOWNLOAD, DOWNLOAD_DONE, GET_DB_RECORDS, TABLE_ORDERS } from "./utils/Constants";
+import { createOrderTable, insertRecordsInOrderTable, getAllRecordsFromOrder } from "./utils/Database";
 
 export default class AppUpdater {
     constructor() {
@@ -26,6 +27,13 @@ export default class AppUpdater {
         autoUpdater.checkForUpdatesAndNotify();
     }
 }
+
+const knex = require('knex')({
+    dialect: 'sqlite3',
+    connection: {
+      filename: './rv911.sqlite'
+    }
+});
 
 let mainWindow = null;
 
@@ -97,6 +105,8 @@ app.on("ready", async () => {
         
         let lastStatus = 0;
 
+        insertRecordsInOrderTable(knex, args.files);
+
         args.files.forEach((file, index) => {
             if (file.url !== "") {
                 files.push(downloadFile(file.url, file.dirPath, index).then(result => {
@@ -108,7 +118,7 @@ app.on("ready", async () => {
                     let count = (pass.length/totalCount)*100;
                     let completion = Number.parseFloat(count).toFixed(2)
                     let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
-                    showLog(`Passed: (${pass.length}/${totalCount})*100 = ${completion}`);
+                    //showLog(`Passed: (${pass.length}/${totalCount})*100 = ${completion}`);
                     
                     let currentStatus = Math.round((processedFiles.length*100)/totalCount);
                     if(currentStatus !== lastStatus) {
@@ -128,7 +138,7 @@ app.on("ready", async () => {
                     let count = (fail.length/totalCount)*100;
                     let failed = Number.parseFloat(count).toFixed(2)
                     let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
-                    showLog(`Failed: (${fail.length}/${totalCount})*100 = ${failed}`);
+                    //showLog(`Failed: (${fail.length}/${totalCount})*100 = ${failed}`);
                     
                     let currentStatus = Math.round((processedFiles.length*100)/totalCount);
                     if(currentStatus !== lastStatus) {
@@ -149,7 +159,7 @@ app.on("ready", async () => {
                 let count = (fail.length/totalCount)*100;
                 let failed = Number.parseFloat(count).toFixed(2)
                 let totalProcessed = Number.parseFloat(((pass.length + fail.length)/totalCount)*100).toFixed(2);
-                showLog(`Failed: (${fail.length}/${totalCount})*100 = ${failed}`);
+                //showLog(`Failed: (${fail.length}/${totalCount})*100 = ${failed}`);
 
                 let currentStatus = Math.round((processedFiles.length*100)/totalCount);
                     if(currentStatus !== lastStatus) {
@@ -177,6 +187,19 @@ app.on("ready", async () => {
         });
     });
 
+    //create records table in SQLite3 database.
+    createOrderTable(knex);
+
+    //get all saved records from SQLite3 database.
+    ipcMain.on(GET_DB_RECORDS, (e, args) => {
+        let records = getAllRecordsFromOrder(knex);
+        records.then(rows => {
+            e.sender.send(GET_DB_RECORDS, rows);
+        }).error(error => {
+            console.log("rv911-get-error", error);
+        });
+    });
+
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
     new AppUpdater();
@@ -187,7 +210,6 @@ function sendResponse(e, result) {
 }
 
 function sendProgressResponse(e, result) {
-    console.log(result);
     e.sender.send(DOWNLOAD_PROGRESS, result);
 }
 
@@ -195,10 +217,8 @@ const downloadFile = (url, path, index) => {
     return new Promise((resolve, reject) => {
         let dirPath = app.getPath("pictures") + path;
         download(url, dirPath).then(data => {
-            console.log(dirPath);
             resolve(index);
         }).catch(error => {
-            console.log(error);
             reject(index);
         });
     });
